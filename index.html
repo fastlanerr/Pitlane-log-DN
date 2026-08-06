@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pitlane Log">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#12151A">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Pitlane Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12151A;
+    --panel:#1B1F26;
+    --panel-2:#20252D;
+    --line:#2C323C;
+    --text:#F2F0EA;
+    --muted:#8A9099;
+    --accent:#FF5A1F;
+    --accent-dim:#7A2F14;
+    --good:#3ECF8E;
+    --warn:#F2B705;
+    --radius:14px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Work Sans',sans-serif;
+    padding-bottom:env(safe-area-inset-bottom);
+    padding-top:env(safe-area-inset-top);
+    overscroll-behavior-y:none;
+  }
+  h1,h2,h3,.disp{font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.03em;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .app{max-width:520px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column;}
+
+  /* ---- Header ---- */
+  header{
+    padding:18px 16px 14px; position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg, var(--bg) 70%, rgba(18,21,26,0));
+    backdrop-filter:blur(6px);
+  }
+  .eyebrow{color:var(--accent); font-size:11px; font-weight:600; letter-spacing:.18em; font-family:'Oswald',sans-serif;}
+  header h1{margin:2px 0 0; font-size:24px; color:var(--text); font-weight:700;}
+  .day-scroll{display:flex; gap:8px; overflow-x:auto; margin-top:14px; padding-bottom:4px; scrollbar-width:none;}
+  .day-scroll::-webkit-scrollbar{display:none;}
+  .day-chip{
+    flex:0 0 auto; padding:8px 14px; border-radius:999px; border:1px solid var(--line);
+    background:var(--panel); color:var(--muted); font-size:13px; font-weight:600;
+    white-space:nowrap; cursor:pointer;
+  }
+  .day-chip.active{background:var(--accent); border-color:var(--accent); color:#12151A;}
+  .day-chip.new{border-style:dashed; color:var(--accent);}
+
+  main{flex:1; padding:4px 16px 100px;}
+
+  /* ---- Cards ---- */
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:12px;
+  }
+  .card-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+  .card-title{font-size:13px; font-weight:600; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; font-family:'Oswald',sans-serif;}
+  .edit-btn{background:none; border:none; color:var(--accent); font-size:13px; font-weight:600; font-family:'Work Sans',sans-serif; padding:4px 6px; cursor:pointer;}
+  .kv-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px 16px;}
+  .kv{display:flex; flex-direction:column; gap:2px;}
+  .kv .l{font-size:11px; color:var(--muted);}
+  .kv .v{font-size:15px; font-weight:600;}
+  .kv .v.empty{color:var(--muted); font-weight:400; font-style:italic;}
+  .rating-mini{display:flex; align-items:center; gap:6px;}
+  .rating-mini .dots{display:flex; gap:3px;}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--line);}
+  .dot.on{background:var(--accent);}
+
+  /* ---- Turns list ---- */
+  .section-label{display:flex; align-items:center; justify-content:space-between; margin:22px 0 10px;}
+  .section-label h2{font-size:16px; margin:0; color:var(--text);}
+  .count-pill{background:var(--panel-2); color:var(--muted); font-size:12px; padding:2px 9px; border-radius:999px; font-family:'JetBrains Mono',monospace;}
+  .turn-card{
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+    padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; cursor:pointer;
+  }
+  .turn-num{
+    width:38px; height:38px; border-radius:10px; background:var(--panel-2); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace;
+    font-weight:700; font-size:15px; color:var(--accent); flex:0 0 auto;
+  }
+  .turn-body{flex:1; min-width:0;}
+  .turn-time{font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:700;}
+  .turn-meta{font-size:12px; color:var(--muted); margin-top:2px;}
+  .turn-feel{display:flex; gap:2px; flex:0 0 auto;}
+  .bar{width:4px; height:16px; border-radius:2px; background:var(--line);}
+
+  .empty-state{
+    text-align:center; padding:40px 20px; color:var(--muted); font-size:14px; line-height:1.6;
+  }
+  .empty-state .big{font-size:34px; margin-bottom:6px;}
+
+  /* ---- Compare mode ---- */
+  .select-toggle-btn{
+    background:none; border:1px solid var(--line); color:var(--muted); font-size:12px; font-weight:600;
+    padding:5px 11px; border-radius:999px; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  .select-toggle-btn.active{border-color:var(--accent); color:var(--accent);}
+  .turn-card{position:relative;}
+  .turn-check{
+    position:absolute; top:10px; right:10px; width:20px; height:20px; border-radius:50%;
+    border:2px solid var(--line); display:none; align-items:center; justify-content:center;
+    font-size:12px; color:#12151A; font-weight:700; background:var(--bg); flex:0 0 auto;
+  }
+  .turn-card.selecting .turn-check{display:flex;}
+  .turn-card.selecting{padding-right:36px;}
+  .turn-card.selected{border-color:var(--accent); background:var(--panel-2);}
+  .turn-card.selected .turn-check{background:var(--accent); border-color:var(--accent);}
+  .turn-card.selected .turn-check::after{content:"✓";}
+
+  .compare-bar{
+    position:fixed; left:0; right:0; bottom:0; background:var(--panel); border-top:1px solid var(--line);
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom)); z-index:40; max-width:520px; margin:0 auto;
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .compare-bar.show{display:flex;}
+  .compare-bar span{font-size:13px; color:var(--muted);}
+  .compare-bar button{white-space:nowrap;}
+
+  .compare-scroll{overflow-x:auto; margin:0 -16px 18px; padding:0 16px;}
+  .compare-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .compare-table th, .compare-table td{
+    padding:9px 12px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap;
+  }
+  .compare-table th{
+    color:var(--muted); font-family:'Oswald',sans-serif; text-transform:uppercase;
+    font-size:10.5px; letter-spacing:.05em; font-weight:600;
+  }
+  .compare-table td.rowlabel, .compare-table th.rowlabel{
+    position:sticky; left:0; background:var(--bg); color:var(--text); font-weight:500;
+  }
+  .compare-table td.best{color:var(--good); font-weight:700;}
+  .compare-table td.mono{font-family:'JetBrains Mono',monospace;}
+  .compare-notes{margin-bottom:14px;}
+  .compare-notes h3{font-size:13px; margin:0 0 8px; color:var(--muted); font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.05em;}
+  .compare-note-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:8px;}
+  .compare-note-card .t{font-size:12px; color:var(--accent); font-weight:700; margin-bottom:6px; font-family:'JetBrains Mono',monospace;}
+  .compare-note-card .n{font-size:13px; color:var(--text); margin-bottom:4px;}
+  .compare-note-card .n .l{color:var(--muted); font-size:11px; display:block;}
+
+  /* ---- FAB ---- */
+  .fab{
+    position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom));
+    width:58px; height:58px; border-radius:50%; background:var(--accent); border:none;
+    color:#12151A; font-size:28px; font-weight:700; box-shadow:0 8px 22px rgba(255,90,31,.4);
+    cursor:pointer; z-index:30; display:flex; align-items:center; justify-content:center;
+    max-width:520px; margin:0 auto;
+  }
+  .fab-wrap{position:fixed; inset:0; pointer-events:none; max-width:520px; margin:0 auto;}
+  .fab-wrap button{pointer-events:auto;}
+
+  /* ---- Sheet / Modal ---- */
+  .sheet-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .sheet-overlay.open{display:flex;}
+  .sheet{
+    background:var(--bg); width:100%; max-width:520px; max-height:92vh; overflow-y:auto;
+    border-radius:20px 20px 0 0; padding:18px 16px calc(28px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);
+    animation:slideUp .22s ease-out;
+  }
+  @keyframes slideUp{from{transform:translateY(30px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+  .sheet-handle{width:36px; height:4px; background:var(--line); border-radius:2px; margin:0 auto 14px;}
+  .sheet-title{font-size:19px; margin:0 0 4px;}
+  .sheet-sub{color:var(--muted); font-size:12px; margin-bottom:18px;}
+
+  .fieldset{margin-bottom:22px;}
+  .fieldset-title{
+    font-size:12px; font-weight:600; color:var(--accent); text-transform:uppercase;
+    letter-spacing:.1em; font-family:'Oswald',sans-serif; margin-bottom:10px;
+    border-bottom:1px solid var(--line); padding-bottom:6px;
+  }
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px;}
+  .field input[type=text], .field input[type=number], .field input[type=date], .field select, .field textarea{
+    width:100%; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:11px 12px; color:var(--text); font-size:15px; font-family:'Work Sans',sans-serif;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--accent);}
+  .field textarea{min-height:60px; resize:vertical;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+
+  .gauge{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  .gauge-label{font-size:13px; font-weight:500; flex:1;}
+  .gauge-track{display:flex; gap:5px;}
+  .gauge-seg{
+    width:26px; height:26px; border-radius:8px; background:var(--panel); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
+    color:var(--muted); cursor:pointer; font-family:'JetBrains Mono',monospace;
+  }
+  .gauge-seg.on{background:var(--accent); border-color:var(--accent); color:#12151A;}
+  .gauge-seg.on.low{background:#C7401D;}
+  .gauge-seg.on.mid{background:var(--warn); color:#12151A;}
+  .gauge-seg.on.high{background:var(--good); color:#12151A;}
+
+  .btn-row{display:flex; gap:10px; margin-top:6px;}
+  .btn{flex:1; padding:14px; border-radius:12px; border:none; font-size:15px; font-weight:600; cursor:pointer; font-family:'Work Sans',sans-serif;}
+  .btn-primary{background:var(--accent); color:#12151A;}
+  .btn-ghost{background:var(--panel); color:var(--text); border:1px solid var(--line);}
+  .btn-danger{background:transparent; color:#E5484D; border:1px solid #4a2326;}
+
+  .toast{
+    position:fixed; bottom:calc(20px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:10px 18px;
+    border-radius:999px; font-size:13px; z-index:80; opacity:0; transition:opacity .25s;
+  }
+  .toast.show{opacity:1;}
+  .loading{text-align:center; padding:60px 20px; color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="eyebrow">Pitlane Log</div>
+    <h1 id="headerTitle">Trackday</h1>
+    <div class="day-scroll" id="dayScroll"></div>
+  </header>
+
+  <main id="main">
+    <div class="loading">Lädt…</div>
+  </main>
+
+  <div class="fab-wrap"><button class="fab" id="fabAdd">+</button></div>
+</div>
+
+<div class="compare-bar" id="compareBar">
+  <span id="compareCount">0 ausgewählt</span>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-ghost" style="padding:9px 14px;" id="compareCancelBtn">Abbrechen</button>
+    <button class="btn btn-primary" style="padding:9px 14px;" id="compareGoBtn">Vergleichen</button>
+  </div>
+</div>
+
+<!-- Kopfdaten Sheet -->
+<div class="sheet-overlay" id="dayOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">Kopfdaten</h2>
+    <div class="sheet-sub">Strecke, Bedingungen, Reifen & Fahrerzustand für diesen Tag</div>
+    <form id="dayForm">
+      <div class="fieldset">
+        <div class="fieldset-title">Strecke & Bedingungen</div>
+        <div class="row2">
+          <div class="field"><label>Datum</label><input type="date" name="datum"></div>
+          <div class="field"><label>Uhrzeit</label><input type="text" name="uhrzeit" placeholder="09:00"></div>
+        </div>
+        <div class="field"><label>Rennstrecke</label><input type="text" name="strecke" placeholder="z.B. Nürburgring"></div>
+        <div class="field"><label>Streckenlayout</label><input type="text" name="layout" placeholder="z.B. GP-Strecke"></div>
+        <div class="row2">
+          <div class="field"><label>Außentemp. (°C)</label><input type="number" name="aussentemp" inputmode="decimal"></div>
+          <div class="field"><label>Asphalttemp. (°C)</label><input type="number" name="asphalttemp" inputmode="decimal"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Wetter</label>
+            <select name="wetter"><option value=""></option><option>sonnig</option><option>bewölkt</option><option>Regen</option><option>wechselhaft</option></select>
+          </div>
+          <div class="field"><label>Luftfeuchtigkeit (%)</label><input type="number" name="luftfeuchtigkeit" inputmode="decimal"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Wind Stärke</label>
+            <select name="windstaerke"><option value=""></option><option>leicht</option><option>mittel</option><option>stark</option></select>
+          </div>
+          <div class="field"><label>Windrichtung</label><input type="text" name="windrichtung" placeholder="z.B. West"></div>
+        </div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Reifen</div>
+        <div class="field"><label>Reifenmodell</label><input type="text" name="reifenmodell" placeholder="z.B. Pirelli SC2"></div>
+        <div class="field"><label>Reifenalter (Trackdays / Heat Cycles)</label><input type="text" name="reifenalter"></div>
+        <div class="field"><label>Reifenverschleiß (Notiz)</label><textarea name="reifenverschleiss"></textarea></div>
+        <div class="field"><label>Reifenbild</label>
+          <select name="reifenbild"><option value=""></option><option>gleichmäßig</option><option>Kaltabrieb</option><option>Schmieren</option><option>Blasenbildung</option><option>gemischt</option></select>
+        </div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Fahrerzustand</div>
+        <div id="dayGauges"></div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="dayCancel">Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Turn Sheet -->
+<div class="sheet-overlay" id="turnOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title" id="turnSheetTitle">Neuer Turn</h2>
+    <div class="sheet-sub">Ein Datensatz pro Fahrsession</div>
+    <button type="button" class="select-toggle-btn active" id="importBtn" style="margin-bottom:16px;">⬆ Aus RaceBox-Datei importieren (CSV)</button>
+    <input type="file" id="importFile" accept=".csv,text/csv" style="display:none;">
+    <div id="importStatus" style="display:none; font-size:12px; color:var(--good); margin:-8px 0 14px; padding:8px 10px; background:var(--panel); border-radius:8px; border:1px solid var(--line);"></div>
+    <form id="turnForm">
+      <div class="fieldset">
+        <div class="fieldset-title">Session</div>
+        <div class="row2">
+          <div class="field"><label>Turn-Nr.</label><input type="number" name="turnNr" inputmode="numeric"></div>
+          <div class="field"><label>Startzeit</label><input type="text" name="startzeit" placeholder="09:15"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Beste Rundenzeit</label><input type="text" name="besteZeit" placeholder="1:58.3" class="mono"></div>
+          <div class="field"><label>Ø Rundenzeit</label><input type="text" name="avgZeit" placeholder="2:01.7" class="mono"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Anzahl Runden</label><input type="number" name="runden" inputmode="numeric"></div>
+          <div class="field"><label>Tankfüllstand</label>
+            <select name="tank"><option value=""></option><option>voll</option><option>3/4</option><option>halb</option><option>1/4</option><option>Reserve</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Verkehrsaufkommen</label>
+            <select name="verkehr"><option value=""></option><option>frei</option><option>mittel</option><option>viel Verkehr</option></select>
+          </div>
+          <div class="field"><label>Fahrergruppe</label>
+            <select name="gruppe"><option value=""></option><option>langsam</option><option>mittel</option><option>schnell</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Reifen im Turn</div>
+        <div class="row2">
+          <div class="field"><label>Druck kalt (bar)</label><input type="number" step="0.1" name="druckKalt" inputmode="decimal"></div>
+          <div class="field"><label>Druck n. Turn (bar)</label><input type="number" step="0.1" name="druckNachTurn" inputmode="decimal"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Temp. vorne (°C)</label><input type="number" name="tempVorne" inputmode="decimal"></div>
+          <div class="field"><label>Temp. hinten (°C)</label><input type="number" name="tempHinten" inputmode="decimal"></div>
+        </div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Fahrgefühl</div>
+        <div id="turnGauges"></div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Notizen</div>
+        <div class="field"><label>Was hat gut funktioniert?</label><textarea name="notizGut"></textarea></div>
+        <div class="field"><label>Wo gab es Probleme?</label><textarea name="notizProblem"></textarea></div>
+        <div class="field"><label>Was möchte ich im nächsten Turn ändern?</label><textarea name="notizAendern"></textarea></div>
+        <div class="field"><label>Was wurde am Motorrad verändert?</label><textarea name="notizMotorrad"></textarea></div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="turnCancel">Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+      <div class="btn-row" id="turnDeleteRow" style="display:none;">
+        <button type="button" class="btn btn-danger" id="turnDelete">Turn löschen</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Compare Sheet -->
+<div class="sheet-overlay" id="compareOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">Turns vergleichen</h2>
+    <div class="sheet-sub" id="compareSub"></div>
+    <div class="compare-scroll">
+      <table class="compare-table" id="compareTable"></table>
+    </div>
+    <div id="compareNotesWrap"></div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" id="compareClose">Fertig</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const DAY_RATINGS = [
+    {key:"schlaf", label:"Schlaf"},
+    {key:"fitness", label:"Fitness / Energie"},
+    {key:"konzentration", label:"Konzentration"},
+  ];
+  const TURN_RATINGS = [
+    {key:"gripVorne", label:"Grip vorne"},
+    {key:"gripHinten", label:"Grip hinten"},
+    {key:"stabBremsen", label:"Stabilität Bremsen"},
+    {key:"einlenk", label:"Einlenkverhalten"},
+    {key:"traktion", label:"Traktion Kurvenausgang"},
+    {key:"vertrauenVorne", label:"Vertrauen Vorderrad"},
+    {key:"gefuehl", label:"Allgemeines Gefühl"},
+  ];
+
+  let days = [];            // [{id, datum, strecke}]
+  let currentDayId = null;
+  let currentDayData = null; // {kopfdaten:{}, turns:[]}
+  let editingTurnId = null;
+  let selectionMode = false;
+  let selectedIds = new Set();
+
+  const COMPARE_ROWS = [
+    {label:"Startzeit", get:t=>t.startzeit, type:"text"},
+    {label:"Beste Rundenzeit", get:t=>t.besteZeit, type:"time", better:"low"},
+    {label:"Ø Rundenzeit", get:t=>t.avgZeit, type:"time", better:"low"},
+    {label:"Anzahl Runden", get:t=>t.runden, type:"number", better:"high"},
+    {label:"Verkehr", get:t=>t.verkehr, type:"text"},
+    {label:"Fahrergruppe", get:t=>t.gruppe, type:"text"},
+    {label:"Tank", get:t=>t.tank, type:"text"},
+    {label:"Druck kalt (bar)", get:t=>t.druckKalt, type:"number"},
+    {label:"Druck n. Turn (bar)", get:t=>t.druckNachTurn, type:"number"},
+    {label:"Temp. vorne (°C)", get:t=>t.tempVorne, type:"number"},
+    {label:"Temp. hinten (°C)", get:t=>t.tempHinten, type:"number"},
+    {label:"Grip vorne", get:t=>t.gripVorne, type:"rating", better:"high"},
+    {label:"Grip hinten", get:t=>t.gripHinten, type:"rating", better:"high"},
+    {label:"Stabilität Bremsen", get:t=>t.stabBremsen, type:"rating", better:"high"},
+    {label:"Einlenkverhalten", get:t=>t.einlenk, type:"rating", better:"high"},
+    {label:"Traktion Kurvenausgang", get:t=>t.traktion, type:"rating", better:"high"},
+    {label:"Vertrauen Vorderrad", get:t=>t.vertrauenVorne, type:"rating", better:"high"},
+    {label:"Allgemeines Gefühl", get:t=>t.gefuehl, type:"rating", better:"high"},
+  ];
+  const NOTE_FIELDS = [
+    {key:"notizGut", label:"Was hat gut funktioniert?"},
+    {key:"notizProblem", label:"Wo gab es Probleme?"},
+    {key:"notizAendern", label:"Was möchte ich ändern?"},
+    {key:"notizMotorrad", label:"Was wurde am Motorrad verändert?"},
+  ];
+
+  function parseTimeToSeconds(str){
+    if(!str) return null;
+    const s = String(str).trim();
+    const m = s.match(/^(\d+):(\d+(?:\.\d+)?)$/);
+    if(m) return parseInt(m[1])*60 + parseFloat(m[2]);
+    const f = parseFloat(s);
+    return isNaN(f) ? null : f;
+  }
+
+  function secondsToTimeStr(sec){
+    if(sec==null || isNaN(sec)) return "";
+    const m = Math.floor(sec/60);
+    const s = (sec - m*60).toFixed(1);
+    return `${m}:${s.padStart(4,"0")}`;
+  }
+
+  // ---------- RaceBox CSV import ----------
+  // Best-effort parser: RaceBox session exports include a descriptive header line
+  // ("Session #.. on DD/MM/YYYY HH:MM at <Track>, N laps, best time: M:SS.ss") and
+  // list individual lap/sector times. Formats can vary by firmware/app version —
+  // this reads what it can find and always leaves fields editable before saving.
+  function parseRaceBoxCsv(text){
+    const result = {startzeit:null, runden:null, besteZeit:null, avgZeit:null, strecke:null, raw:{lapsFound:0}};
+
+    const headerMatch = text.match(/on\s+\d{1,2}\/\d{1,2}\/\d{4}\s+(\d{1,2}:\d{2})\s+at\s+([^,\n]+?)\s*,\s*(\d+)\s*laps?\s*,\s*best time:\s*([\d:.]+)/i);
+    let scanText = text;
+    if(headerMatch){
+      result.startzeit = headerMatch[1];
+      result.strecke = headerMatch[2].trim();
+      result.runden = headerMatch[3];
+      result.besteZeit = headerMatch[4];
+      scanText = text.replace(headerMatch[0], ""); // avoid double-counting the header's best time as a lap
+    }
+
+    // Collect plausible lap-time-looking values (m:ss.s / m:ss.ss) anywhere in the file,
+    // to derive an average and, if the header wasn't found, a lap count / best time too.
+    const timeMatches = Array.from(scanText.matchAll(/\b([0-9]:[0-5][0-9]\.\d{1,3})\b/g)).map(m=>m[1]);
+    const secs = timeMatches.map(parseTimeToSeconds).filter(v=>v!=null && v>10 && v<600);
+
+    if(secs.length){
+      result.raw.lapsFound = secs.length;
+      if(!result.besteZeit) result.besteZeit = secondsToTimeStr(Math.min(...secs));
+      if(!result.runden) result.runden = String(secs.length);
+      const avg = secs.reduce((a,b)=>a+b,0)/secs.length;
+      result.avgZeit = secondsToTimeStr(avg);
+    }
+
+    return result;
+  }
+
+  function wireImportButton(){
+    const btn = $("#importBtn");
+    const fileInput = $("#importFile");
+    const status = $("#importStatus");
+    if(!btn || btn.dataset.wired) return;
+    btn.dataset.wired = "1";
+    btn.onclick = ()=> fileInput.click();
+    fileInput.onchange = async ()=>{
+      const file = fileInput.files[0];
+      if(!file) return;
+      try{
+        const text = await file.text();
+        const parsed = parseRaceBoxCsv(text);
+        const form = $("#turnForm");
+        if(parsed.startzeit) form.elements["startzeit"].value = parsed.startzeit;
+        if(parsed.runden) form.elements["runden"].value = parsed.runden;
+        if(parsed.besteZeit) form.elements["besteZeit"].value = parsed.besteZeit;
+        if(parsed.avgZeit) form.elements["avgZeit"].value = parsed.avgZeit;
+
+        const parts = [];
+        if(parsed.raw.lapsFound) parts.push(`${parsed.raw.lapsFound} Rundenzeiten erkannt`);
+        if(parsed.strecke) parts.push(`Strecke „${parsed.strecke}“`);
+        status.style.display = "block";
+        status.textContent = parts.length
+          ? `✓ Importiert: ${parts.join(", ")}. Bitte vor dem Speichern prüfen.`
+          : `Keine erkennbaren Rundenzeiten in dieser Datei gefunden — bitte manuell ausfüllen.`;
+        if(!parts.length) status.style.color = "var(--warn)";
+      }catch(e){
+        console.error("RaceBox import failed", e);
+        status.style.display = "block";
+        status.style.color = "var(--warn)";
+        status.textContent = "Import fehlgeschlagen — Datei konnte nicht gelesen werden.";
+      }
+      fileInput.value = "";
+    };
+  }
+
+  const $ = (sel, root) => (root||document).querySelector(sel);
+  const $$ = (sel, root) => Array.from((root||document).querySelectorAll(sel));
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function showToast(msg){
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(()=>t.classList.remove("show"), 1600);
+  }
+
+  function fmtDateLabel(iso){
+    if(!iso) return "Ohne Datum";
+    const d = new Date(iso+"T00:00:00");
+    if(isNaN(d)) return iso;
+    return d.toLocaleDateString("de-DE",{day:"2-digit", month:"2-digit", year:"2-digit"});
+  }
+
+  // ---------- Storage ----------
+  // Uses localStorage: data stays on this device/browser only, persists across visits.
+  const LS_PREFIX = "pitlane:";
+
+  async function loadDaysIndex(){
+    try{
+      const raw = localStorage.getItem(LS_PREFIX + "days-index");
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ console.error("loadDaysIndex failed", e); return []; }
+  }
+  async function saveDaysIndex(list){
+    try{ localStorage.setItem(LS_PREFIX + "days-index", JSON.stringify(list)); }
+    catch(e){ console.error("saveDaysIndex failed", e); showToast("Speichern fehlgeschlagen"); }
+  }
+  async function loadDayData(id){
+    try{
+      const raw = localStorage.getItem(LS_PREFIX + "day-data:" + id);
+      return raw ? JSON.parse(raw) : {kopfdaten:{}, turns:[]};
+    }catch(e){ console.error("loadDayData failed", e); return {kopfdaten:{}, turns:[]}; }
+  }
+  async function saveDayData(id, data){
+    try{ localStorage.setItem(LS_PREFIX + "day-data:" + id, JSON.stringify(data)); }
+    catch(e){ console.error("saveDayData failed", e); showToast("Speichern fehlgeschlagen — Speicher evtl. voll"); }
+  }
+
+  // ---------- Rendering: day chips ----------
+  function renderDayChips(){
+    const wrap = $("#dayScroll");
+    wrap.innerHTML = "";
+    days.forEach(d=>{
+      const chip = document.createElement("div");
+      chip.className = "day-chip" + (d.id===currentDayId ? " active" : "");
+      chip.textContent = fmtDateLabel(d.datum) + (d.strecke ? " · "+d.strecke : "");
+      chip.onclick = ()=> switchDay(d.id);
+      wrap.appendChild(chip);
+    });
+    const addChip = document.createElement("div");
+    addChip.className = "day-chip new";
+    addChip.textContent = "+ Neuer Tag";
+    addChip.onclick = createNewDay;
+    wrap.appendChild(addChip);
+  }
+
+  async function switchDay(id){
+    currentDayId = id;
+    currentDayData = await loadDayData(id);
+    selectionMode = false;
+    selectedIds.clear();
+    renderDayChips();
+    renderMain();
+  }
+
+  async function createNewDay(){
+    const id = uid();
+    const todayIso = new Date().toISOString().slice(0,10);
+    const entry = {id, datum: todayIso, strecke: ""};
+    days.unshift(entry);
+    await saveDaysIndex(days);
+    currentDayData = {kopfdaten:{datum: todayIso}, turns:[]};
+    await saveDayData(id, currentDayData);
+    currentDayId = id;
+    renderDayChips();
+    renderMain();
+    openDaySheet();
+  }
+
+  // ---------- Main content ----------
+  function ratingDots(val){
+    val = parseInt(val)||0;
+    let html = '<div class="dots">';
+    for(let i=1;i<=5;i++) html += `<div class="dot ${i<=val?'on':''}"></div>`;
+    html += '</div>';
+    return html;
+  }
+
+  function renderMain(){
+    const main = $("#main");
+    if(!currentDayId || !currentDayData){
+      main.innerHTML = `<div class="empty-state"><div class="big">🏁</div>Noch kein Trackday angelegt.<br>Tippe oben auf „+ Neuer Tag“, um zu starten.</div>`;
+      $("#headerTitle").textContent = "Trackday";
+      return;
+    }
+    const kd = currentDayData.kopfdaten || {};
+    $("#headerTitle").textContent = kd.strecke ? kd.strecke : "Trackday";
+
+    const turns = currentDayData.turns || [];
+
+    const kdHtml = `
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">Kopfdaten</div>
+          <button class="edit-btn" id="editDayBtn">Bearbeiten</button>
+        </div>
+        <div class="kv-grid">
+          <div class="kv"><span class="l">Datum</span><span class="v ${kd.datum?'':'empty'}">${kd.datum ? fmtDateLabel(kd.datum) : '—'}</span></div>
+          <div class="kv"><span class="l">Strecke</span><span class="v ${kd.strecke?'':'empty'}">${kd.strecke || '—'}</span></div>
+          <div class="kv"><span class="l">Wetter</span><span class="v ${kd.wetter?'':'empty'}">${kd.wetter || '—'}</span></div>
+          <div class="kv"><span class="l">Außen / Asphalt</span><span class="v mono ${kd.aussentemp||kd.asphalttemp?'':'empty'}">${kd.aussentemp||'–'}° / ${kd.asphalttemp||'–'}°</span></div>
+          <div class="kv"><span class="l">Reifen</span><span class="v ${kd.reifenmodell?'':'empty'}">${kd.reifenmodell || '—'}</span></div>
+          <div class="kv"><span class="l">Fahrerzustand</span><span class="v">${ratingSummary(kd)}</span></div>
+        </div>
+      </div>`;
+
+    const turnsHtml = turns.length ? turns.map(t=>turnCardHtml(t)).join("") :
+      `<div class="empty-state">Noch keine Turns erfasst.<br>Tippe unten rechts auf „+“.</div>`;
+
+    main.innerHTML = kdHtml + `
+      <div class="section-label">
+        <h2>Turns</h2>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="count-pill">${turns.length}</span>
+          ${turns.length>=2 ? `<button class="select-toggle-btn ${selectionMode?'active':''}" id="toggleSelectBtn">${selectionMode ? 'Fertig' : 'Vergleichen'}</button>` : ''}
+        </div>
+      </div>
+      ${turnsHtml}
+    `;
+
+    $("#editDayBtn").onclick = openDaySheet;
+    if($("#toggleSelectBtn")) $("#toggleSelectBtn").onclick = toggleSelectionMode;
+    $$(".turn-card").forEach(el=>{
+      el.onclick = ()=>{
+        if(selectionMode) toggleSelect(el.dataset.id);
+        else openTurnSheet(el.dataset.id);
+      };
+    });
+    updateCompareBar();
+  }
+
+  function toggleSelectionMode(){
+    selectionMode = !selectionMode;
+    if(!selectionMode) selectedIds.clear();
+    renderMain();
+  }
+
+  function toggleSelect(id){
+    if(selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    $$(".turn-card").forEach(el=>{
+      el.classList.toggle("selected", selectedIds.has(el.dataset.id));
+    });
+    updateCompareBar();
+  }
+
+  function updateCompareBar(){
+    const bar = $("#compareBar");
+    if(selectionMode && selectedIds.size>0){
+      bar.classList.add("show");
+      $("#compareCount").textContent = selectedIds.size + " ausgewählt";
+      $("#compareGoBtn").disabled = selectedIds.size<2;
+      $("#compareGoBtn").style.opacity = selectedIds.size<2 ? .5 : 1;
+    } else {
+      bar.classList.remove("show");
+    }
+  }
+
+  $("#compareCancelBtn").onclick = ()=>{
+    selectionMode=false; selectedIds.clear(); renderMain();
+  };
+  $("#compareGoBtn").onclick = ()=>{
+    if(selectedIds.size<2) return;
+    openCompareSheet();
+  };
+  $("#compareClose").onclick = ()=> $("#compareOverlay").classList.remove("open");
+  $("#compareOverlay").addEventListener("click", e=>{ if(e.target.id==="compareOverlay") $("#compareOverlay").classList.remove("open"); });
+
+  function openCompareSheet(){
+    const turns = currentDayData.turns.filter(t=>selectedIds.has(t.id))
+      .sort((a,b)=>(parseInt(a.turnNr)||0)-(parseInt(b.turnNr)||0));
+    $("#compareSub").textContent = turns.map(t=>"Turn "+(t.turnNr??"–")).join("  ·  ");
+
+    let thead = '<tr><th class="rowlabel">Kennzahl</th>' + turns.map(t=>`<th>Turn ${t.turnNr ?? "–"}</th>`).join("") + '</tr>';
+    let rows = "";
+    COMPARE_ROWS.forEach(r=>{
+      const vals = turns.map(t=>r.get(t));
+      let bestIdx = -1;
+      if(r.better && vals.some(v=>v!=="" && v!=null)){
+        let bestVal = null;
+        vals.forEach((v,i)=>{
+          let num = r.type==="time" ? parseTimeToSeconds(v) : (v==="" || v==null ? null : parseFloat(v));
+          if(num==null || isNaN(num)) return;
+          if(bestVal===null || (r.better==="low" ? num<bestVal : num>bestVal)){ bestVal=num; bestIdx=i; }
+        });
+      }
+      rows += `<tr><td class="rowlabel">${r.label}</td>` + vals.map((v,i)=>{
+        const display = (v===""||v==null) ? "–" : v + (r.type==="rating" ? "/5" : "");
+        const cls = (i===bestIdx ? "best " : "") + (r.type==="time"||r.type==="number"||r.type==="rating" ? "mono" : "");
+        return `<td class="${cls}">${display}</td>`;
+      }).join("") + "</tr>";
+    });
+    $("#compareTable").innerHTML = thead + rows;
+
+    let notesHtml = "";
+    NOTE_FIELDS.forEach(nf=>{
+      const anyText = turns.some(t=>t[nf.key]);
+      if(!anyText) return;
+      notesHtml += `<div class="compare-notes"><h3>${nf.label}</h3>`;
+      turns.forEach(t=>{
+        if(!t[nf.key]) return;
+        notesHtml += `<div class="compare-note-card"><div class="t">Turn ${t.turnNr ?? "–"}</div><div class="n">${escapeHtml(t[nf.key])}</div></div>`;
+      });
+      notesHtml += `</div>`;
+    });
+    $("#compareNotesWrap").innerHTML = notesHtml;
+
+    $("#compareOverlay").classList.add("open");
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function ratingSummary(kd){
+    const vals = [kd.schlaf, kd.fitness, kd.konzentration].filter(v=>v);
+    if(!vals.length) return '<span class="empty">—</span>';
+    const avg = (vals.reduce((a,b)=>a+parseInt(b),0)/vals.length).toFixed(1);
+    return `${avg}/5`;
+  }
+
+  function turnCardHtml(t){
+    const feelKeys = ["gripVorne","gripHinten","stabBremsen","einlenk","traktion","vertrauenVorne","gefuehl"];
+    const bars = feelKeys.map(k=>{
+      const v = parseInt(t[k])||0;
+      const h = 6 + v*2;
+      let color = "var(--line)";
+      if(v>=4) color="var(--good)"; else if(v===3) color="var(--warn)"; else if(v>0) color="var(--accent)";
+      return `<div class="bar" style="height:${h}px; background:${v?color:'var(--line)'}"></div>`;
+    }).join("");
+    const sel = selectionMode ? "selecting" : "";
+    const isSel = selectedIds.has(t.id) ? "selected" : "";
+    return `
+      <div class="turn-card ${sel} ${isSel}" data-id="${t.id}">
+        <div class="turn-check"></div>
+        <div class="turn-num">${t.turnNr ?? "–"}</div>
+        <div class="turn-body">
+          <div class="turn-time mono">${t.besteZeit || "–:––.–"}</div>
+          <div class="turn-meta">${t.startzeit || "–"} · ${t.runden || 0} Runden · ${t.verkehr || "–"}</div>
+        </div>
+        <div class="turn-feel">${bars}</div>
+      </div>`;
+  }
+
+  // ---------- Gauge builder ----------
+  function buildGauges(container, ratings, values){
+    container.innerHTML = "";
+    ratings.forEach(r=>{
+      const row = document.createElement("div");
+      row.className = "gauge";
+      row.dataset.key = r.key;
+      const track = document.createElement("div");
+      track.className = "gauge-track";
+      for(let i=1;i<=5;i++){
+        const seg = document.createElement("div");
+        seg.className = "gauge-seg";
+        seg.textContent = i;
+        seg.dataset.val = i;
+        track.appendChild(seg);
+      }
+      row.innerHTML = `<div class="gauge-label">${r.label}</div>`;
+      row.appendChild(track);
+      container.appendChild(row);
+      setGaugeValue(row, values && values[r.key] ? parseInt(values[r.key]) : 0);
+      track.addEventListener("click", (e)=>{
+        const seg = e.target.closest(".gauge-seg");
+        if(!seg) return;
+        const current = parseInt(row.dataset.value)||0;
+        const clicked = parseInt(seg.dataset.val);
+        setGaugeValue(row, clicked===current ? 0 : clicked); // tap again to clear
+      });
+    });
+  }
+  function setGaugeValue(row, val){
+    row.dataset.value = val;
+    $$(".gauge-seg", row).forEach(seg=>{
+      const v = parseInt(seg.dataset.val);
+      seg.classList.remove("on","low","mid","high");
+      if(v<=val){
+        seg.classList.add("on");
+        if(val<=2) seg.classList.add("low");
+        else if(val===3) seg.classList.add("mid");
+        else seg.classList.add("high");
+      }
+    });
+  }
+  function readGauges(container){
+    const out = {};
+    $$(".gauge", container).forEach(row=>{
+      out[row.dataset.key] = row.dataset.value || "";
+    });
+    return out;
+  }
+
+  // ---------- Day sheet ----------
+  function openDaySheet(){
+    const form = $("#dayForm");
+    const kd = (currentDayData && currentDayData.kopfdaten) || {};
+    form.reset();
+    Object.keys(kd).forEach(k=>{
+      const el = form.elements[k];
+      if(el) el.value = kd[k];
+    });
+    buildGauges($("#dayGauges"), DAY_RATINGS, kd);
+    $("#dayOverlay").classList.add("open");
+  }
+  function closeDaySheet(){ $("#dayOverlay").classList.remove("open"); }
+
+  $("#dayCancel").onclick = closeDaySheet;
+  $("#dayOverlay").addEventListener("click", e=>{ if(e.target.id==="dayOverlay") closeDaySheet(); });
+
+  $("#dayForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const kd = {};
+    for(const [k,v] of fd.entries()) kd[k] = v;
+    Object.assign(kd, readGauges($("#dayGauges")));
+    currentDayData.kopfdaten = kd;
+    await saveDayData(currentDayId, currentDayData);
+    const idx = days.find(d=>d.id===currentDayId);
+    if(idx){ idx.datum = kd.datum || idx.datum; idx.strecke = kd.strecke || ""; await saveDaysIndex(days); }
+    closeDaySheet();
+    renderDayChips();
+    renderMain();
+    showToast("Kopfdaten gespeichert");
+  });
+
+  // ---------- Turn sheet ----------
+  function nextTurnNr(){
+    const turns = (currentDayData && currentDayData.turns) || [];
+    const max = turns.reduce((m,t)=> Math.max(m, parseInt(t.turnNr)||0), 0);
+    return max+1;
+  }
+
+  function openTurnSheet(id){
+    editingTurnId = id || null;
+    const form = $("#turnForm");
+    form.reset();
+    $("#importStatus").style.display = "none";
+    $("#importStatus").style.color = "var(--good)";
+    wireImportButton();
+    let t = {};
+    if(editingTurnId){
+      t = currentDayData.turns.find(x=>x.id===editingTurnId) || {};
+      $("#turnSheetTitle").textContent = "Turn " + (t.turnNr ?? "");
+      $("#turnDeleteRow").style.display = "flex";
+    } else {
+      t = {turnNr: nextTurnNr()};
+      $("#turnSheetTitle").textContent = "Neuer Turn";
+      $("#turnDeleteRow").style.display = "none";
+    }
+    Object.keys(t).forEach(k=>{
+      const el = form.elements[k];
+      if(el) el.value = t[k];
+    });
+    if(!form.elements["turnNr"].value) form.elements["turnNr"].value = nextTurnNr();
+    buildGauges($("#turnGauges"), TURN_RATINGS, t);
+    $("#turnOverlay").classList.add("open");
+  }
+  function closeTurnSheet(){ $("#turnOverlay").classList.remove("open"); editingTurnId=null; }
+
+  $("#turnCancel").onclick = closeTurnSheet;
+  $("#turnOverlay").addEventListener("click", e=>{ if(e.target.id==="turnOverlay") closeTurnSheet(); });
+  $("#fabAdd").onclick = ()=>{
+    if(!currentDayId){ showToast("Erst einen Trackday anlegen"); return; }
+    openTurnSheet(null);
+  };
+
+  $("#turnForm").addEventListener("submit", async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const t = {};
+    for(const [k,v] of fd.entries()) t[k] = v;
+    Object.assign(t, readGauges($("#turnGauges")));
+    if(!currentDayData.turns) currentDayData.turns = [];
+    if(editingTurnId){
+      const i = currentDayData.turns.findIndex(x=>x.id===editingTurnId);
+      t.id = editingTurnId;
+      if(i>-1) currentDayData.turns[i] = t; else currentDayData.turns.push(t);
+    } else {
+      t.id = uid();
+      currentDayData.turns.push(t);
+    }
+    currentDayData.turns.sort((a,b)=>(parseInt(a.turnNr)||0)-(parseInt(b.turnNr)||0));
+    await saveDayData(currentDayId, currentDayData);
+    closeTurnSheet();
+    renderMain();
+    showToast("Turn gespeichert");
+  });
+
+  $("#turnDelete").onclick = async ()=>{
+    if(!editingTurnId) return;
+    currentDayData.turns = currentDayData.turns.filter(x=>x.id!==editingTurnId);
+    await saveDayData(currentDayId, currentDayData);
+    closeTurnSheet();
+    renderMain();
+    showToast("Turn gelöscht");
+  };
+
+  // ---------- Init ----------
+  async function init(){
+    days = await loadDaysIndex();
+    days.sort((a,b)=> (b.datum||"").localeCompare(a.datum||""));
+    if(days.length){
+      currentDayId = days[0].id;
+      currentDayData = await loadDayData(currentDayId);
+    }
+    renderDayChips();
+    renderMain();
+  }
+  init();
+
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", ()=>{
+      navigator.serviceWorker.register("sw.js").catch(err=>console.warn("SW registration failed:", err));
+    });
+  }
+})();
+</script>
+</body>
+</html>

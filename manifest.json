@@ -1,0 +1,16 @@
+{
+  "name": "Pitlane Log",
+  "short_name": "Pitlane Log",
+  "description": "Trackday-Datenerfassung: Kopfdaten, Turns und Fahrgefühl protokollieren und vergleichen.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12151A",
+  "theme_color": "#12151A",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
