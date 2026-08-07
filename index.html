@@ -14,6 +14,11 @@
 <title>Pitlane Log</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
     --bg:#12151A;
@@ -49,6 +54,14 @@
   }
   .eyebrow{color:var(--accent); font-size:11px; font-weight:600; letter-spacing:.18em; font-family:'Oswald',sans-serif;}
   header h1{margin:2px 0 0; font-size:24px; color:var(--text); font-weight:700;}
+  .header-top{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+  .team-pill{
+    flex:0 0 auto; margin-top:2px; display:flex; align-items:center; gap:6px;
+    background:var(--panel); border:1px solid var(--line); border-radius:999px;
+    padding:6px 12px; font-size:12px; color:var(--muted); cursor:pointer; white-space:nowrap;
+  }
+  .team-pill.connected{border-color:var(--good); color:var(--good);}
+  .team-pill .icon{font-size:13px;}
   .day-scroll{display:flex; gap:8px; overflow-x:auto; margin-top:14px; padding-bottom:4px; scrollbar-width:none;}
   .day-scroll::-webkit-scrollbar{display:none;}
   .day-chip{
@@ -226,8 +239,16 @@
 <body>
 <div class="app">
   <header>
-    <div class="eyebrow">Pitlane Log</div>
-    <h1 id="headerTitle">Trackday</h1>
+    <div class="header-top">
+      <div>
+        <div class="eyebrow">Pitlane Log</div>
+        <h1 id="headerTitle">Trackday</h1>
+      </div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+        <div class="team-pill" id="teamPill">☁ Nur lokal</div>
+        <div class="team-pill" id="namePill">👤 Name</div>
+      </div>
+    </div>
     <div class="day-scroll" id="dayScroll"></div>
   </header>
 
@@ -243,6 +264,61 @@
   <div style="display:flex; gap:8px;">
     <button class="btn btn-ghost" style="padding:9px 14px;" id="compareCancelBtn">Abbrechen</button>
     <button class="btn btn-primary" style="padding:9px 14px;" id="compareGoBtn">Vergleichen</button>
+  </div>
+</div>
+
+<!-- Name Sheet -->
+<div class="sheet-overlay" id="nameOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">Dein Name</h2>
+    <div class="sheet-sub">Wird bei Einträgen gespeichert, damit im Team erkennbar ist, wer was eingetragen hat.</div>
+    <div class="field"><label>Name / Kürzel</label><input type="text" id="nameInput" placeholder="z.B. Max"></div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" id="nameSaveBtn">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- Team / Cloud Sheet -->
+<div class="sheet-overlay" id="teamOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 class="sheet-title">Team-Synchronisierung</h2>
+    <div class="sheet-sub" id="teamSub">Verbinde diese App mit einer gemeinsamen Cloud-Datenbank, damit du und dein Kollege dieselben Turns live sehen.</div>
+
+    <div id="teamDisconnectedView">
+      <div class="fieldset">
+        <div class="fieldset-title">Firebase-Konfiguration</div>
+        <div class="field">
+          <label>Firebase-Config (aus der Firebase-Konsole kopieren, als JSON einfügen)</label>
+          <textarea id="teamConfigInput" style="min-height:110px; font-family:'JetBrains Mono',monospace; font-size:12px;" placeholder='{"apiKey":"...", "authDomain":"...", "projectId":"...", ...}'></textarea>
+        </div>
+        <div class="field">
+          <label>Team-Code (frei wählbar, beide tragen denselben ein)</label>
+          <input type="text" id="teamCodeInput" placeholder="z.B. schmidt-racing-2026">
+        </div>
+      </div>
+      <div id="teamError" style="display:none; color:#E5484D; font-size:13px; margin-bottom:12px;"></div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="teamCancelBtn">Abbrechen</button>
+        <button type="button" class="btn btn-primary" id="teamConnectBtn">Verbinden</button>
+      </div>
+    </div>
+
+    <div id="teamConnectedView" style="display:none;">
+      <div class="fieldset">
+        <div class="fieldset-title">Aktuelle Verbindung</div>
+        <div class="field">
+          <label>Team-Code (an deinen Kollegen weitergeben)</label>
+          <input type="text" id="teamCodeDisplay" readonly>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="teamCloseBtn">Schließen</button>
+        <button type="button" class="btn btn-danger" id="teamDisconnectBtn">Verbindung trennen</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -308,9 +384,10 @@
     <div class="sheet-handle"></div>
     <h2 class="sheet-title" id="turnSheetTitle">Neuer Turn</h2>
     <div class="sheet-sub">Ein Datensatz pro Fahrsession</div>
-    <button type="button" class="select-toggle-btn active" id="importBtn" style="margin-bottom:16px;">⬆ Aus RaceBox-Datei importieren (CSV)</button>
+    <button type="button" class="select-toggle-btn active" id="importBtn" style="margin-bottom:10px;">⬆ Aus RaceBox-Datei importieren (CSV)</button>
     <input type="file" id="importFile" accept=".csv,text/csv" style="display:none;">
-    <div id="importStatus" style="display:none; font-size:12px; color:var(--good); margin:-8px 0 14px; padding:8px 10px; background:var(--panel); border-radius:8px; border:1px solid var(--line);"></div>
+    <div id="importStatus" style="display:none; font-size:12px; color:var(--good); margin:-4px 0 14px; padding:8px 10px; background:var(--panel); border-radius:8px; border:1px solid var(--line);"></div>
+    <button type="button" class="select-toggle-btn" id="turnPdfBtn" style="margin-bottom:16px;">⬇ Diesen Turn als PDF</button>
     <form id="turnForm">
       <div class="fieldset">
         <div class="fieldset-title">Session</div>
@@ -341,12 +418,40 @@
       <div class="fieldset">
         <div class="fieldset-title">Reifen im Turn</div>
         <div class="row2">
-          <div class="field"><label>Druck kalt (bar)</label><input type="number" step="0.1" name="druckKalt" inputmode="decimal"></div>
-          <div class="field"><label>Druck n. Turn (bar)</label><input type="number" step="0.1" name="druckNachTurn" inputmode="decimal"></div>
+          <div class="field"><label>Druck vorne warm (bar)</label><input type="number" step="0.1" name="druckVorneWarm" inputmode="decimal" placeholder="nach Aufwärmen"></div>
+          <div class="field"><label>Druck hinten warm (bar)</label><input type="number" step="0.1" name="druckHintenWarm" inputmode="decimal" placeholder="nach Aufwärmen"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Druck vorne n. Turn (bar)</label><input type="number" step="0.1" name="druckVorneNachTurn" inputmode="decimal"></div>
+          <div class="field"><label>Druck hinten n. Turn (bar)</label><input type="number" step="0.1" name="druckHintenNachTurn" inputmode="decimal"></div>
         </div>
         <div class="row2">
           <div class="field"><label>Temp. vorne (°C)</label><input type="number" name="tempVorne" inputmode="decimal"></div>
           <div class="field"><label>Temp. hinten (°C)</label><input type="number" name="tempHinten" inputmode="decimal"></div>
+        </div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Fahrwerk vorne</div>
+        <div class="row2">
+          <div class="field"><label>Federvorspannung</label><input type="text" name="fwVorneVorspannung" placeholder="z.B. 3 Ringe / 8mm"></div>
+          <div class="field"><label>Gabelüberstand (mm)</label><input type="number" name="fwVorneGabelueberstand" inputmode="decimal"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Druckstufe / Comp (Klicks)</label><input type="number" name="fwVorneComp" inputmode="numeric"></div>
+          <div class="field"><label>Zugstufe / Rebound (Klicks)</label><input type="number" name="fwVorneRebound" inputmode="numeric"></div>
+        </div>
+      </div>
+
+      <div class="fieldset">
+        <div class="fieldset-title">Fahrwerk hinten</div>
+        <div class="row2">
+          <div class="field"><label>Federvorspannung</label><input type="text" name="fwHintenVorspannung" placeholder="z.B. Stufe 5"></div>
+          <div class="field"><label>Höhe / Zugstrebe (mm)</label><input type="number" name="fwHintenHoehe" inputmode="decimal"></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Druckstufe / Comp (Klicks)</label><input type="number" name="fwHintenComp" inputmode="numeric"></div>
+          <div class="field"><label>Zugstufe / Rebound (Klicks)</label><input type="number" name="fwHintenRebound" inputmode="numeric"></div>
         </div>
       </div>
 
@@ -426,8 +531,18 @@
     {label:"Verkehr", get:t=>t.verkehr, type:"text"},
     {label:"Fahrergruppe", get:t=>t.gruppe, type:"text"},
     {label:"Tank", get:t=>t.tank, type:"text"},
-    {label:"Druck kalt (bar)", get:t=>t.druckKalt, type:"number"},
-    {label:"Druck n. Turn (bar)", get:t=>t.druckNachTurn, type:"number"},
+    {label:"Druck vorne warm (bar)", get:t=>t.druckVorneWarm, type:"number"},
+    {label:"Druck hinten warm (bar)", get:t=>t.druckHintenWarm, type:"number"},
+    {label:"Druck vorne n. Turn (bar)", get:t=>t.druckVorneNachTurn, type:"number"},
+    {label:"Druck hinten n. Turn (bar)", get:t=>t.druckHintenNachTurn, type:"number"},
+    {label:"Federvorspannung vorne", get:t=>t.fwVorneVorspannung, type:"text"},
+    {label:"Gabelüberstand (mm)", get:t=>t.fwVorneGabelueberstand, type:"number"},
+    {label:"Comp. vorne (Klicks)", get:t=>t.fwVorneComp, type:"number"},
+    {label:"Rebound vorne (Klicks)", get:t=>t.fwVorneRebound, type:"number"},
+    {label:"Federvorspannung hinten", get:t=>t.fwHintenVorspannung, type:"text"},
+    {label:"Höhe hinten (mm)", get:t=>t.fwHintenHoehe, type:"number"},
+    {label:"Comp. hinten (Klicks)", get:t=>t.fwHintenComp, type:"number"},
+    {label:"Rebound hinten (Klicks)", get:t=>t.fwHintenRebound, type:"number"},
     {label:"Temp. vorne (°C)", get:t=>t.tempVorne, type:"number"},
     {label:"Temp. hinten (°C)", get:t=>t.tempHinten, type:"number"},
     {label:"Grip vorne", get:t=>t.gripVorne, type:"rating", better:"high"},
@@ -551,30 +666,230 @@
     return d.toLocaleDateString("de-DE",{day:"2-digit", month:"2-digit", year:"2-digit"});
   }
 
-  // ---------- Storage ----------
-  // Uses localStorage: data stays on this device/browser only, persists across visits.
+  // ---------- Storage: local (per-device) vs cloud (shared team) ----------
   const LS_PREFIX = "pitlane:";
+  let cloudMode = false;
+  let db = null;
+  let teamCode = null;
+  let unsubDays = null;
+  let unsubDay = null;
 
-  async function loadDaysIndex(){
+  function loadCloudConfig(){
+    try{
+      const raw = localStorage.getItem(LS_PREFIX + "cloud-config");
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function saveCloudConfigLS(cfg){
+    localStorage.setItem(LS_PREFIX + "cloud-config", JSON.stringify(cfg));
+  }
+  function clearCloudConfigLS(){
+    localStorage.removeItem(LS_PREFIX + "cloud-config");
+  }
+
+  function daysCollection(){
+    return db.collection("teams").doc(teamCode).collection("days");
+  }
+
+  async function connectCloud(firebaseConfig, code){
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    await firebase.auth().signInAnonymously();
+    db = firebase.firestore();
+    teamCode = code;
+    cloudMode = true;
+    saveCloudConfigLS({firebaseConfig, code});
+    subscribeDays();
+  }
+
+  function disconnectCloud(){
+    if(unsubDays) unsubDays();
+    if(unsubDay) unsubDay();
+    unsubDays = null; unsubDay = null;
+    cloudMode = false; db = null; teamCode = null;
+    clearCloudConfigLS();
+  }
+
+  function subscribeDays(){
+    if(unsubDays) unsubDays();
+    unsubDays = daysCollection().onSnapshot(snap=>{
+      days = snap.docs.map(d=>({id:d.id, datum:d.data().datum||"", strecke:d.data().strecke||""}));
+      days.sort((a,b)=>(b.datum||"").localeCompare(a.datum||""));
+      if(!currentDayId && days.length) currentDayId = days[0].id;
+      if(currentDayId && !unsubDay) subscribeCurrentDay(currentDayId);
+      renderDayChips();
+      updateTeamPill();
+    }, err=>{
+      console.error("subscribeDays failed", err);
+      showToast("Cloud-Verbindung gestört");
+    });
+  }
+
+  function subscribeCurrentDay(id){
+    if(unsubDay) unsubDay();
+    unsubDay = daysCollection().doc(id).onSnapshot(doc=>{
+      currentDayData = (doc.exists && doc.data().payload) ? JSON.parse(doc.data().payload) : {kopfdaten:{}, turns:[]};
+      renderMain();
+    }, err=>{
+      console.error("subscribeCurrentDay failed", err);
+    });
+  }
+
+  // ---- Local (localStorage) implementations ----
+  async function loadDaysIndexLocal(){
     try{
       const raw = localStorage.getItem(LS_PREFIX + "days-index");
       return raw ? JSON.parse(raw) : [];
     }catch(e){ console.error("loadDaysIndex failed", e); return []; }
   }
-  async function saveDaysIndex(list){
+  async function saveDaysIndexLocal(list){
     try{ localStorage.setItem(LS_PREFIX + "days-index", JSON.stringify(list)); }
     catch(e){ console.error("saveDaysIndex failed", e); showToast("Speichern fehlgeschlagen"); }
   }
-  async function loadDayData(id){
+  async function loadDayDataLocal(id){
     try{
       const raw = localStorage.getItem(LS_PREFIX + "day-data:" + id);
       return raw ? JSON.parse(raw) : {kopfdaten:{}, turns:[]};
     }catch(e){ console.error("loadDayData failed", e); return {kopfdaten:{}, turns:[]}; }
   }
-  async function saveDayData(id, data){
+  async function saveDayDataLocal(id, data){
     try{ localStorage.setItem(LS_PREFIX + "day-data:" + id, JSON.stringify(data)); }
     catch(e){ console.error("saveDayData failed", e); showToast("Speichern fehlgeschlagen — Speicher evtl. voll"); }
   }
+
+  // ---- Routed functions used by the rest of the app ----
+  async function loadDaysIndex(){
+    return cloudMode ? days : await loadDaysIndexLocal();
+  }
+  async function saveDaysIndex(list){
+    if(cloudMode) return; // cloud days-index is implicit (Firestore collection), nothing to persist separately
+    await saveDaysIndexLocal(list);
+  }
+  async function loadDayData(id){
+    if(cloudMode) return currentDayData || {kopfdaten:{}, turns:[]};
+    return await loadDayDataLocal(id);
+  }
+  async function saveDayData(id, data){
+    if(cloudMode){
+      try{
+        await daysCollection().doc(id).set({
+          datum: (data.kopfdaten && data.kopfdaten.datum) || "",
+          strecke: (data.kopfdaten && data.kopfdaten.strecke) || "",
+          payload: JSON.stringify(data),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }catch(e){
+        console.error("cloud saveDayData failed", e);
+        showToast("Cloud-Speichern fehlgeschlagen");
+      }
+    } else {
+      await saveDayDataLocal(id, data);
+    }
+  }
+
+  function updateTeamPill(){
+    const pill = $("#teamPill");
+    if(!pill) return;
+    if(cloudMode){
+      pill.textContent = "☁ " + teamCode;
+      pill.classList.add("connected");
+    } else {
+      pill.textContent = "☁ Nur lokal";
+      pill.classList.remove("connected");
+    }
+  }
+
+  // ---------- Display name ----------
+  function getDisplayName(){
+    return localStorage.getItem(LS_PREFIX + "display-name") || "";
+  }
+  function setDisplayName(name){
+    localStorage.setItem(LS_PREFIX + "display-name", name);
+    updateNamePill();
+  }
+  function updateNamePill(){
+    const pill = $("#namePill");
+    if(!pill) return;
+    const n = getDisplayName();
+    pill.textContent = "👤 " + (n || "Name setzen");
+  }
+  function openNameSheet(){
+    $("#nameInput").value = getDisplayName();
+    $("#nameOverlay").classList.add("open");
+  }
+  $("#namePill").onclick = openNameSheet;
+  $("#nameSaveBtn").onclick = ()=>{
+    const v = $("#nameInput").value.trim();
+    if(!v){ showToast("Bitte einen Namen eingeben"); return; }
+    setDisplayName(v);
+    $("#nameOverlay").classList.remove("open");
+    showToast("Name gespeichert");
+  };
+
+  // ---------- Team sheet wiring ----------
+  function openTeamSheet(){
+    if(cloudMode){
+      $("#teamDisconnectedView").style.display = "none";
+      $("#teamConnectedView").style.display = "block";
+      $("#teamCodeDisplay").value = teamCode;
+    } else {
+      $("#teamDisconnectedView").style.display = "block";
+      $("#teamConnectedView").style.display = "none";
+      $("#teamError").style.display = "none";
+    }
+    $("#teamOverlay").classList.add("open");
+  }
+  $("#teamPill").onclick = openTeamSheet;
+  $("#teamCancelBtn").onclick = ()=> $("#teamOverlay").classList.remove("open");
+  $("#teamCloseBtn").onclick = ()=> $("#teamOverlay").classList.remove("open");
+
+  $("#teamConnectBtn").onclick = async ()=>{
+    const errEl = $("#teamError");
+    errEl.style.display = "none";
+    let cfg;
+    try{
+      cfg = JSON.parse($("#teamConfigInput").value.trim());
+    }catch(e){
+      errEl.textContent = "Konnte die Firebase-Config nicht lesen — bitte als gültiges JSON einfügen.";
+      errEl.style.display = "block";
+      return;
+    }
+    const code = $("#teamCodeInput").value.trim();
+    if(!code){
+      errEl.textContent = "Bitte einen Team-Code eingeben.";
+      errEl.style.display = "block";
+      return;
+    }
+    if(!getDisplayName()){
+      $("#teamOverlay").classList.remove("open");
+      openNameSheet();
+      showToast("Bitte zuerst deinen Namen eintragen");
+      return;
+    }
+    try{
+      $("#teamConnectBtn").textContent = "Verbinde…";
+      await connectCloud(cfg, code);
+      $("#teamOverlay").classList.remove("open");
+      showToast("Mit Team verbunden");
+      currentDayId = null;
+      renderMain();
+    }catch(e){
+      console.error("connectCloud failed", e);
+      errEl.textContent = "Verbindung fehlgeschlagen — bitte Config und Firestore-Einrichtung prüfen.";
+      errEl.style.display = "block";
+    }finally{
+      $("#teamConnectBtn").textContent = "Verbinden";
+    }
+  };
+
+  $("#teamDisconnectBtn").onclick = ()=>{
+    disconnectCloud();
+    $("#teamOverlay").classList.remove("open");
+    updateTeamPill();
+    currentDayId = null;
+    currentDayData = null;
+    init();
+    showToast("Verbindung getrennt — zurück im lokalen Modus");
+  };
 
   // ---------- Rendering: day chips ----------
   function renderDayChips(){
@@ -596,24 +911,40 @@
 
   async function switchDay(id){
     currentDayId = id;
-    currentDayData = await loadDayData(id);
     selectionMode = false;
     selectedIds.clear();
+    if(cloudMode){
+      subscribeCurrentDay(id);
+    } else {
+      currentDayData = await loadDayData(id);
+      renderDayChips();
+      renderMain();
+    }
     renderDayChips();
-    renderMain();
   }
 
   async function createNewDay(){
+    if(cloudMode && !getDisplayName()){
+      openNameSheet();
+      showToast("Bitte zuerst deinen Namen eintragen");
+      return;
+    }
     const id = uid();
     const todayIso = new Date().toISOString().slice(0,10);
-    const entry = {id, datum: todayIso, strecke: ""};
-    days.unshift(entry);
-    await saveDaysIndex(days);
     currentDayData = {kopfdaten:{datum: todayIso}, turns:[]};
-    await saveDayData(id, currentDayData);
-    currentDayId = id;
-    renderDayChips();
-    renderMain();
+    if(cloudMode){
+      await saveDayData(id, currentDayData);
+      currentDayId = id;
+      subscribeCurrentDay(id);
+    } else {
+      const entry = {id, datum: todayIso, strecke: ""};
+      days.unshift(entry);
+      await saveDaysIndex(days);
+      await saveDayData(id, currentDayData);
+      currentDayId = id;
+      renderDayChips();
+      renderMain();
+    }
     openDaySheet();
   }
 
@@ -662,6 +993,7 @@
         <h2>Turns</h2>
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="count-pill">${turns.length}</span>
+          ${turns.length>0 ? `<button class="select-toggle-btn" id="dayPdfBtn">PDF</button>` : ''}
           ${turns.length>=2 ? `<button class="select-toggle-btn ${selectionMode?'active':''}" id="toggleSelectBtn">${selectionMode ? 'Fertig' : 'Vergleichen'}</button>` : ''}
         </div>
       </div>
@@ -669,6 +1001,7 @@
     `;
 
     $("#editDayBtn").onclick = openDaySheet;
+    if($("#dayPdfBtn")) $("#dayPdfBtn").onclick = exportDayPdf;
     if($("#toggleSelectBtn")) $("#toggleSelectBtn").onclick = toggleSelectionMode;
     $$(".turn-card").forEach(el=>{
       el.onclick = ()=>{
@@ -867,6 +1200,7 @@
     const kd = {};
     for(const [k,v] of fd.entries()) kd[k] = v;
     Object.assign(kd, readGauges($("#dayGauges")));
+    kd.zuletztVon = getDisplayName() || kd.zuletztVon || "";
     currentDayData.kopfdaten = kd;
     await saveDayData(currentDayId, currentDayData);
     const idx = days.find(d=>d.id===currentDayId);
@@ -912,6 +1246,7 @@
   function closeTurnSheet(){ $("#turnOverlay").classList.remove("open"); editingTurnId=null; }
 
   $("#turnCancel").onclick = closeTurnSheet;
+  $("#turnPdfBtn").onclick = exportSingleTurnPdf;
   $("#turnOverlay").addEventListener("click", e=>{ if(e.target.id==="turnOverlay") closeTurnSheet(); });
   $("#fabAdd").onclick = ()=>{
     if(!currentDayId){ showToast("Erst einen Trackday anlegen"); return; }
@@ -924,6 +1259,7 @@
     const t = {};
     for(const [k,v] of fd.entries()) t[k] = v;
     Object.assign(t, readGauges($("#turnGauges")));
+    t.autor = getDisplayName() || t.autor || "";
     if(!currentDayData.turns) currentDayData.turns = [];
     if(editingTurnId){
       const i = currentDayData.turns.findIndex(x=>x.id===editingTurnId);
@@ -949,8 +1285,150 @@
     showToast("Turn gelöscht");
   };
 
+  // ---------- PDF export ----------
+  function buildKopfdatenRows(kd){
+    return [
+      ["Datum", kd.datum ? fmtDateLabel(kd.datum) : "–"],
+      ["Rennstrecke", kd.strecke || "–"],
+      ["Streckenlayout", kd.layout || "–"],
+      ["Wetter", kd.wetter || "–"],
+      ["Außentemp. / Asphalttemp.", `${kd.aussentemp||"–"}°C / ${kd.asphalttemp||"–"}°C`],
+      ["Wind", [kd.windstaerke, kd.windrichtung].filter(Boolean).join(" · ") || "–"],
+      ["Luftfeuchtigkeit", kd.luftfeuchtigkeit ? kd.luftfeuchtigkeit+"%" : "–"],
+      ["Reifenmodell", kd.reifenmodell || "–"],
+      ["Reifenalter", kd.reifenalter || "–"],
+      ["Reifenbild", kd.reifenbild || "–"],
+      ["Fahrerzustand (Schlaf/Fitness/Konz.)", `${kd.schlaf||"–"} / ${kd.fitness||"–"} / ${kd.konzentration||"–"}`],
+    ];
+  }
+  function buildTurnRows(t){
+    return [
+      ["Startzeit", t.startzeit || "–"],
+      ["Beste Rundenzeit", t.besteZeit || "–"],
+      ["Ø Rundenzeit", t.avgZeit || "–"],
+      ["Anzahl Runden", t.runden || "–"],
+      ["Verkehr", t.verkehr || "–"],
+      ["Fahrergruppe", t.gruppe || "–"],
+      ["Tankfüllstand", t.tank || "–"],
+      ["Druck vorne/hinten warm", `${t.druckVorneWarm||"–"} / ${t.druckHintenWarm||"–"} bar`],
+      ["Druck vorne/hinten n. Turn", `${t.druckVorneNachTurn||"–"} / ${t.druckHintenNachTurn||"–"} bar`],
+      ["Reifentemp. vorne/hinten", `${t.tempVorne||"–"}°C / ${t.tempHinten||"–"}°C`],
+      ["Fahrwerk vorne (Vorspannung/Gabelüberstand)", `${t.fwVorneVorspannung||"–"} / ${t.fwVorneGabelueberstand||"–"}mm`],
+      ["Fahrwerk vorne (Comp/Rebound)", `${t.fwVorneComp||"–"} / ${t.fwVorneRebound||"–"} Klicks`],
+      ["Fahrwerk hinten (Vorspannung/Höhe)", `${t.fwHintenVorspannung||"–"} / ${t.fwHintenHoehe||"–"}mm`],
+      ["Fahrwerk hinten (Comp/Rebound)", `${t.fwHintenComp||"–"} / ${t.fwHintenRebound||"–"} Klicks`],
+      ["Grip vorne/hinten", `${t.gripVorne||"–"}/5 · ${t.gripHinten||"–"}/5`],
+      ["Stabilität Bremsen", `${t.stabBremsen||"–"}/5`],
+      ["Einlenkverhalten", `${t.einlenk||"–"}/5`],
+      ["Traktion Kurvenausgang", `${t.traktion||"–"}/5`],
+      ["Vertrauen Vorderrad", `${t.vertrauenVorne||"–"}/5`],
+      ["Allgemeines Gefühl", `${t.gefuehl||"–"}/5`],
+      ["Eingetragen von", t.autor || "–"],
+    ];
+  }
+
+  function generatePdf(turnIds){
+    if(!(window.jspdf && window.jspdf.jsPDF)){
+      showToast("PDF-Bibliothek noch nicht geladen — kurz warten und erneut versuchen");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:"pt", format:"a4"});
+    const kd = (currentDayData && currentDayData.kopfdaten) || {};
+    const turns = (currentDayData.turns||[])
+      .filter(t=>turnIds.includes(t.id))
+      .sort((a,b)=>(parseInt(a.turnNr)||0)-(parseInt(b.turnNr)||0));
+
+    let y = 40;
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(18);
+    doc.text("Pitlane Log", 40, y);
+    y += 20;
+    doc.setFontSize(11);
+    doc.setFont("helvetica","normal");
+    doc.text(`${kd.strecke || "Trackday"}${kd.datum ? " · " + fmtDateLabel(kd.datum) : ""}`, 40, y);
+    y += 18;
+
+    doc.autoTable({
+      startY: y,
+      head: [["Kopfdaten", ""]],
+      body: buildKopfdatenRows(kd),
+      theme: "grid",
+      styles: {fontSize: 9, cellPadding: 4},
+      headStyles: {fillColor: [31,35,43]},
+      margin: {left: 40, right: 40},
+    });
+    y = doc.lastAutoTable.finalY + 22;
+
+    turns.forEach(t=>{
+      if(y > 700){ doc.addPage(); y = 40; }
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(13);
+      doc.text(`Turn ${t.turnNr ?? "–"}`, 40, y);
+      y += 6;
+      doc.autoTable({
+        startY: y + 8,
+        body: buildTurnRows(t),
+        theme: "grid",
+        styles: {fontSize: 8.5, cellPadding: 3.5},
+        margin: {left: 40, right: 40},
+      });
+      y = doc.lastAutoTable.finalY + 14;
+
+      const notesFields = [
+        ["Was hat gut funktioniert?", t.notizGut],
+        ["Wo gab es Probleme?", t.notizProblem],
+        ["Was möchte ich ändern?", t.notizAendern],
+        ["Was wurde am Motorrad verändert?", t.notizMotorrad],
+      ].filter(([,v])=>v);
+
+      notesFields.forEach(([label, val])=>{
+        if(y > 740){ doc.addPage(); y = 40; }
+        doc.setFont("helvetica","bold");
+        doc.setFontSize(9.5);
+        doc.text(label, 40, y);
+        y += 12;
+        doc.setFont("helvetica","normal");
+        const lines = doc.splitTextToSize(val, 500);
+        doc.text(lines, 40, y);
+        y += lines.length*11 + 8;
+      });
+      y += 12;
+    });
+
+    const safe = (kd.strecke || "trackday").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+    doc.save(`pitlane-log_${safe}_${kd.datum || "export"}.pdf`);
+  }
+
+  function exportDayPdf(){
+    const turns = (currentDayData && currentDayData.turns) || [];
+    if(!turns.length){ showToast("Keine Turns zum Exportieren"); return; }
+    generatePdf(turns.map(t=>t.id));
+  }
+  function exportSingleTurnPdf(){
+    if(!editingTurnId){ showToast("Erst speichern, dann als PDF exportierbar"); return; }
+    generatePdf([editingTurnId]);
+  }
+
   // ---------- Init ----------
   async function init(){
+    updateNamePill();
+    updateTeamPill();
+    if(!getDisplayName()){
+      openNameSheet();
+    }
+    const savedCloud = loadCloudConfig();
+    if(savedCloud && savedCloud.firebaseConfig && savedCloud.code){
+      try{
+        await connectCloud(savedCloud.firebaseConfig, savedCloud.code);
+        updateTeamPill();
+        return; // subscribeDays() drives rendering from here on
+      }catch(e){
+        console.error("auto-reconnect failed", e);
+        showToast("Cloud-Verbindung fehlgeschlagen — lokaler Modus");
+        disconnectCloud();
+      }
+    }
     days = await loadDaysIndex();
     days.sort((a,b)=> (b.datum||"").localeCompare(a.datum||""));
     if(days.length){
