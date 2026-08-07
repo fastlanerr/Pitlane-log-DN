@@ -1,4 +1,4 @@
-const CACHE_NAME = "pitlane-log-v1";
+const CACHE_NAME = "pitlane-log-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -24,9 +24,29 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Cache-first for app shell, falling back to network, and updating cache in background.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
+  const isHTML = event.request.mode === "navigate" ||
+    (event.request.headers.get("accept") || "").includes("text/html");
+
+  if (isHTML) {
+    // Network-first for the app shell itself: always fetch the latest index.html
+    // when online, so code updates show up immediately. Falls back to the cached
+    // copy only when offline.
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (icons, manifest) that rarely change.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
